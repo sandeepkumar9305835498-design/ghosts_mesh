@@ -78,7 +78,6 @@ header {
     cursor: pointer;
 }
 
-/* Chat Layout Mechanics */
 .card.outgoing {
     margin-left: auto;
     background-color: #005c4b;
