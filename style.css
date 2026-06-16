@@ -280,3 +280,58 @@ button {
     font-weight: bold;
     color: #ff4a4a;
 }
+/* मुख्य स्क्रीन को पूरा स्पेस देने के लिए */
+#wall-screen {
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* पूरी मोबाइल स्क्रीन की हाइट */
+    position: relative;
+}
+
+/* मैसेज कंटेनर को स्क्रॉल करने के लिए ताकि इनपुट नीचे ही रहे */
+#messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 70px; /* इनपुट बॉक्स के लिए जगह छोड़ना */
+}
+
+/* चैट इनपुट एरिया को नीचे फिक्स करने की एकदम सही स्टाइलिंग */
+.chat-input-area {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background: #111827; /* डार्क बैकग्राउंड */
+    border-top: 1px solid #1f2937;
+    z-index: 100;
+    box-sizing: border-box;
+}
+
+/* इनपुट फील्ड की चौड़ाई */
+#msg-input {
+    flex: 1;
+    padding: 12px;
+    border-radius: 20px;
+    border: 1px solid #374151;
+    background: #1f2937;
+    color: #ffffff;
+    outline: none;
+}
+
+/* बटन्स की स्टाइलिंग */
+.chat-input-area button {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #9ca3af;
+    padding: 5px;
+}
+
+#send-btn {
+    color: #00f2fe !important; /* सेंड बटन का चमकता रंग */
+}
