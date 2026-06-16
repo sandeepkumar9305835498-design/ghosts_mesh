@@ -22,6 +22,9 @@ function verifyAndLogin() {
     document.getElementById("wall-screen").classList.remove("hidden");
     document.getElementById("user-badge").innerText = userGhostID;
     
+    userCurrentDP = "https://api.dicebear.com/7.x/bottts/svg?seed=" + userGhostID;
+    document.getElementById("my-dp-display").src = userCurrentDP;
+
     initializeMeshNetwork();
     setupTypingListener();
 }
@@ -42,7 +45,7 @@ function toggleAppTheme() {
     }
 }
 
-// 3. Modal Controls (Pop-up open/close)
+// 3. Modal Controls
 function openConnectModal() {
     document.getElementById("connect-modal").classList.remove("hidden");
 }
@@ -52,7 +55,7 @@ function closeConnectModal() {
     document.getElementById("peer-id-input").value = "";
 }
 
-// 4. Profile Picture (DP) Controller
+// 4. Real Gallery DP Controller
 function triggerDPUpload() {
     document.getElementById("dp-file-input").click();
 }
@@ -82,7 +85,7 @@ function broadcastProfileUpdate() {
     });
 }
 
-// 5. Strict Content Moderation Filter
+// 5. Content Filter
 function isContentSafe(text) {
     const cleanText = text.toLowerCase().trim();
     for (let i = 0; i < bannedWords.length; i++) {
@@ -98,7 +101,7 @@ function initializeMeshNetwork() {
     myPeerInstance = new Peer(userGhostID);
 
     myPeerInstance.on('open', (id) => {
-        updateSystemStatus("System: Broadcast node live on mesh network. ID: " + id);
+        updateSystemStatus("System: Broadcast node live on network. ID: " + id);
     });
 
     myPeerInstance.on('connection', (incomingConn) => {
@@ -119,21 +122,33 @@ function connectFromUI() {
         alert("Invalid Ghost ID.");
         return;
     }
+    
+    const alreadyConnected = activeConnections.some(conn => conn.peer === targetPeerID);
+    if (alreadyConnected) {
+        alert("Already linked to this node.");
+        closeConnectModal();
+        return;
+    }
+
     connectToPeerNode(targetPeerID);
-    closeConnectModal(); // Automatically close popup after connecting
+    closeConnectModal();
 }
 
+// 7. Handshake Connection Initiator
 function connectToPeerNode(targetPeerID) {
     updateSystemStatus(`Attempting direct link handshake to: ${targetPeerID}...`);
     const outboundConn = myPeerInstance.connect(targetPeerID);
     setupConnectionListeners(outboundConn);
 }
 
-// 7. Connection State & Event Manager
+// 8. Connection Listeners & Event Manager
 function setupConnectionListeners(conn) {
     conn.on('open', () => {
         updateSystemStatus(`Direct secure line established with ${conn.peer}!`);
-        activeConnections.push(conn);
+        
+        if (!activeConnections.some(c => c.peer === conn.peer)) {
+            activeConnections.push(conn);
+        }
         
         conn.send({
             type: "dp-update",
@@ -170,6 +185,11 @@ function setupConnectionListeners(conn) {
         else if (data.type === "dp-update") {
             window["dp_" + data.sender] = data.dpData;
             updateSystemStatus(`System: ${data.sender} updated their profile picture.`);
+            
+            const openMessages = document.querySelectorAll(`.msg-avatar-${data.sender}`);
+            openMessages.forEach(img => {
+                img.src = data.dpData;
+            });
         }
     });
 
@@ -179,9 +199,11 @@ function setupConnectionListeners(conn) {
     });
 }
 
-// 8. WhatsApp Typing Trigger Logic
+// 9. Typing Status Broadcaster
 function setupTypingListener() {
     const msgInput = document.getElementById("msg-input");
+    if (!msgInput) return;
+    
     msgInput.addEventListener("input", () => {
         broadcastTypingStatus(true);
         clearTimeout(typingTimeout);
@@ -212,7 +234,7 @@ function sendDeliveryAck(conn, msgId) {
     }
 }
 
-// 9. Data Transmission Logic
+// 10. Core Messaging System
 function sendMessage() {
     const msgInput = document.getElementById("msg-input");
     const messageText = msgInput.value.trim();
@@ -244,39 +266,57 @@ function sendMessage() {
     msgInput.value = "";
 }
 
-// UI Rendering Engine Utilities
+// 11. UI Rendering Utilities (Left/Right Integrated Layout)
 function appendMessage(sender, text, direction, msgId, avatarSrc) {
     const container = document.getElementById("messages-container");
     const card = document.createElement("div");
-    card.className = "card";
+    
     card.style.display = "flex";
     card.style.gap = "10px";
-    card.style.alignItems = "center";
+    card.style.alignItems = "flex-start";
+    card.style.padding = "10px 14px";
+    card.style.borderRadius = "12px";
+    card.style.width = "fit-content";
+    card.style.marginBottom = "4px";
+
+    if (direction === "outgoing") {
+        card.className = "card outgoing outgoing-row";
+    } else {
+        card.className = "card incoming";
+    }
 
     const finalAvatar = avatarSrc || window["dp_" + sender] || "https://api.dicebear.com/7.x/bottts/svg?seed=" + sender;
 
     const imgNode = document.createElement("img");
     imgNode.src = finalAvatar;
+    imgNode.className = `msg-avatar-${sender}`;
     imgNode.style.width = "30px";
     imgNode.style.height = "30px";
     imgNode.style.borderRadius = "50px";
     imgNode.style.border = "1px solid var(--accent-color)";
+    imgNode.style.flexShrink = "0";
 
     const contentDiv = document.createElement("div");
 
     const senderDiv = document.createElement("div");
     senderDiv.className = "sender";
     senderDiv.innerText = sender;
+    if (direction === "outgoing") {
+        senderDiv.style.display = "none";
+    }
 
     const textDiv = document.createElement("div");
     textDiv.innerText = text;
+    textDiv.style.wordBreak = "break-word";
+    textDiv.style.fontSize = "14px";
 
     if (direction === "outgoing") {
         const tickSpan = document.createElement("span");
         tickSpan.id = `tick-${msgId}`;
         tickSpan.innerText = " ✓";
-        tickSpan.style.fontSize = "12px";
-        tickSpan.style.color = "#9ca3af";
+        tickSpan.style.fontSize = "11px";
+        tickSpan.style.color = "#a6b4be";
+        tickSpan.style.marginLeft = "5px";
         textDiv.appendChild(tickSpan);
     }
 
