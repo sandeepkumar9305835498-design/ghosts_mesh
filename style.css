@@ -56,6 +56,7 @@ header {
     border-radius: 50%;
     border: 2px solid var(--accent-color);
     object-fit: cover;
+    cursor: pointer;
 }
 
 #messages-container {
@@ -73,35 +74,36 @@ header {
     max-width: 75%;
     width: fit-content;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    position: relative;
+    cursor: pointer;
 }
 
-/* Chat Alignment & Colors for Real WhatsApp Look */
+/* Chat Layout Mechanics */
 .card.outgoing {
-    margin-left: auto; /* Push to the right side */
-    background-color: #005c4b; /* Dark green WhatsApp-like bubble */
+    margin-left: auto;
+    background-color: #005c4b;
     color: #ffffff;
     border-top-right-radius: 2px;
     border: none;
 }
 
 body.light-theme .card.outgoing {
-    background-color: #d9fdd3; /* Light green WhatsApp-like bubble */
+    background-color: #d9fdd3;
     color: #111b21;
 }
 
 .card.incoming {
-    margin-right: auto; /* Push to the left side */
-    background-color: #202c33; /* Dark grey bubble */
+    margin-right: auto;
+    background-color: #202c33;
     border-top-left-radius: 2px;
     border: none;
 }
 
 body.light-theme .card.incoming {
-    background-color: #ffffff; /* Pure white bubble */
+    background-color: #ffffff;
     color: #111b21;
 }
 
-/* Reverse layout for outgoing messages to show text then avatar */
 .card.outgoing-row {
     flex-direction: row-reverse !important;
 }
@@ -111,6 +113,17 @@ body.light-theme .card.incoming {
     color: var(--accent-color);
     font-weight: bold;
     margin-bottom: 2px;
+}
+
+.reaction-badge {
+    position: absolute;
+    bottom: -10px;
+    right: 10px;
+    background: #374151;
+    border-radius: 10px;
+    padding: 1px 5px;
+    font-size: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 #typing-indicator {
@@ -133,9 +146,10 @@ body.light-theme .card.incoming {
     display: flex;
     gap: 8px;
     border-top: 1px solid var(--border-color);
+    align-items: center;
 }
 
-input[type="text"], input[type="tel"] {
+input[type="text"], input[type="tel"], input[type="password"] {
     flex: 1;
     padding: 12px;
     background-color: var(--bg-color);
@@ -155,15 +169,19 @@ button {
 .send-btn {
     background-color: var(--accent-color);
     color: #0b0f19;
-    padding: 0 20px;
+    padding: 10px 20px;
     border-radius: 20px;
     font-size: 14px;
 }
 
 .icon-btn {
     background: transparent;
-    font-size: 18px;
+    font-size: 20px;
     padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-color);
 }
 
 .action-btn {
@@ -180,7 +198,7 @@ button {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.8);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -208,13 +226,6 @@ button {
     font-size: 13px;
     color: var(--system-text);
     margin: 0 0 15px 0;
-}
-
-.modal-box input {
-    width: 100%;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    box-sizing: border-box;
 }
 
 .modal-actions {
@@ -249,15 +260,24 @@ button {
     text-align: center;
     width: 90%;
     max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.login-box input {
-    width: 100%;
-    margin-bottom: 15px;
-    box-sizing: border-box;
-}
-
-.login-box button {
-    width: 100%;
+.shared-img, .shared-video {
+    max-width: 200px;
     border-radius: 8px;
+    margin-top: 5px;
+    display: block;
+}
+
+.view-once-locked {
+    background: #374151;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    text-align: center;
+    font-weight: bold;
+    color: #ff4a4a;
 }
