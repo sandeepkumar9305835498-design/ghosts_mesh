@@ -45,7 +45,6 @@
             </div>
             
             <div class="header-right">
-                <!-- Live Voice and Video Call Buttons -->
                 <button onclick="initiateP2PCall('voice')" class="icon-btn" title="Voice Call">📞</button>
                 <button onclick="initiateP2PCall('video')" class="icon-btn" title="Video Call">📹</button>
                 <button id="theme-toggle-btn" onclick="toggleAppTheme()" class="icon-btn">☀️</button>
@@ -104,21 +103,17 @@
         </div>
     </div>
 
-    <!-- LIVE CALLING INTERFACE SCREEN (Voice & Video Screen Overlay) -->
+    <!-- LIVE CALLING INTERFACE SCREEN -->
     <div id="call-screen" class="screen modal-overlay hidden">
         <div class="modal-box" style="max-width: 400px; width: 95%; background: #0b0f19; border: 2px solid var(--accent-color); position: relative;">
             <h4 id="call-status-label">📞 P2P Outgoing Call...</h4>
             <p id="call-peer-label">Connecting to Node</p>
             
-            <!-- Video Display Grid -->
             <div id="video-grid" class="hidden" style="display: flex; flex-direction: column; gap: 10px; margin: 15px 0; position: relative;">
-                <!-- Remote User Video -->
                 <video id="remote-video" autoplay playsinline style="width: 100%; height: 220px; background: #111827; border-radius: 10px; object-fit: cover;"></video>
-                <!-- Local User Self Video Mini Bubble -->
                 <video id="local-video" autoplay muted playsinline style="width: 90px; height: 120px; background: #1f2937; border-radius: 8px; object-fit: cover; position: absolute; bottom: 10px; right: 10px; border: 2px solid var(--accent-color);"></video>
             </div>
 
-            <!-- Call Control Button Actions -->
             <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
                 <button id="accept-call-btn" onclick="acceptIncomingCall()" class="confirm-btn hidden" style="background: #22c55e; padding: 12px 25px; border-radius: 50px; font-size: 16px;">Answer</button>
                 <button onclick="endCurrentCall()" class="cancel-btn" style="background: #ef4444; color: white; border: none; padding: 12px 25px; border-radius: 50px; font-size: 16px;">Hang Up</button>
