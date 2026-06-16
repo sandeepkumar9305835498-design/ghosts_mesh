@@ -66,6 +66,7 @@ header {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    padding-bottom: 80px; /* इनपुट बॉक्स के लिए जगह */
 }
 
 .card {
@@ -139,48 +140,47 @@ body.light-theme .card.incoming {
     margin: 5px 0;
 }
 
-.input-area {
-    padding: 12px;
-    background-color: var(--card-bg);
+/* चैट इनपुट एरिया को नीचे फिक्स करने की एकदम सही स्टाइलिंग */
+.chat-input-area {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
     display: flex;
-    gap: 8px;
-    border-top: 1px solid var(--border-color);
     align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background: var(--card-bg);
+    border-top: 1px solid var(--border-color);
+    z-index: 100;
+    box-sizing: border-box;
 }
 
-input[type="text"], input[type="tel"], input[type="password"] {
+#msg-input {
     flex: 1;
     padding: 12px;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
     border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    color: var(--text-color);
     outline: none;
     font-size: 14px;
 }
 
-button {
-    cursor: pointer;
-    font-weight: bold;
+.chat-input-area button {
+    background: none;
     border: none;
-}
-
-.send-btn {
-    background-color: var(--accent-color);
-    color: #0b0f19;
-    padding: 10px 20px;
-    border-radius: 20px;
-    font-size: 14px;
-}
-
-.icon-btn {
-    background: transparent;
     font-size: 20px;
+    cursor: pointer;
+    color: var(--text-color);
     padding: 5px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-color);
+}
+
+#send-btn {
+    color: var(--accent-color) !important;
 }
 
 .action-btn {
@@ -214,29 +214,6 @@ button {
     width: 100%;
     max-width: 320px;
     text-align: center;
-}
-
-.modal-box h4 {
-    margin: 0 0 10px 0;
-    font-size: 18px;
-}
-
-.modal-box p {
-    font-size: 13px;
-    color: var(--system-text);
-    margin: 0 0 15px 0;
-}
-
-.modal-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.modal-actions button {
-    flex: 1;
-    padding: 10px;
-    border-radius: 8px;
-    font-size: 13px;
 }
 
 .cancel-btn {
@@ -279,59 +256,4 @@ button {
     text-align: center;
     font-weight: bold;
     color: #ff4a4a;
-}
-/* मुख्य स्क्रीन को पूरा स्पेस देने के लिए */
-#wall-screen {
-    display: flex;
-    flex-direction: column;
-    height: 100vh; /* पूरी मोबाइल स्क्रीन की हाइट */
-    position: relative;
-}
-
-/* मैसेज कंटेनर को स्क्रॉल करने के लिए ताकि इनपुट नीचे ही रहे */
-#messages-container {
-    flex: 1;
-    overflow-y: auto;
-    padding-bottom: 70px; /* इनपुट बॉक्स के लिए जगह छोड़ना */
-}
-
-/* चैट इनपुट एरिया को नीचे फिक्स करने की एकदम सही स्टाइलिंग */
-.chat-input-area {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px;
-    background: #111827; /* डार्क बैकग्राउंड */
-    border-top: 1px solid #1f2937;
-    z-index: 100;
-    box-sizing: border-box;
-}
-
-/* इनपुट फील्ड की चौड़ाई */
-#msg-input {
-    flex: 1;
-    padding: 12px;
-    border-radius: 20px;
-    border: 1px solid #374151;
-    background: #1f2937;
-    color: #ffffff;
-    outline: none;
-}
-
-/* बटन्स की स्टाइलिंग */
-.chat-input-area button {
-    background: none;
-    border: none;
-    font-size: 20px;
-    cursor: pointer;
-    color: #9ca3af;
-    padding: 5px;
-}
-
-#send-btn {
-    color: #00f2fe !important; /* सेंड बटन का चमकता रंग */
 }
