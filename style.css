@@ -1,0 +1,236 @@
+:root {
+    --bg-color: #0b0f19;
+    --card-bg: #111827;
+    --text-color: #ffffff;
+    --accent-color: #00f2fe;
+    --border-color: #374151;
+    --system-text: #9ca3af;
+}
+
+body.light-theme {
+    --bg-color: #f3f4f6;
+    --card-bg: #ffffff;
+    --text-color: #1f2937;
+    --accent-color: #0080ff;
+    --border-color: #e5e7eb;
+    --system-text: #6b7280;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    overflow: hidden;
+}
+
+.screen {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.hidden {
+    display: none !important;
+}
+
+header {
+    background-color: var(--card-bg);
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header-left, .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--accent-color);
+    object-fit: cover;
+}
+
+#messages-container {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    padding: 10px 14px;
+    border-radius: 12px;
+    max-width: 80%;
+    width: fit-content;
+}
+
+.sender {
+    font-size: 11px;
+    color: var(--accent-color);
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+#typing-indicator {
+    padding: 5px 15px;
+    font-size: 12px;
+    color: var(--accent-color);
+    font-style: italic;
+}
+
+.system-msg {
+    text-align: center;
+    font-size: 11px;
+    color: var(--system-text);
+    margin: 5px 0;
+}
+
+/* Bottom Input Area optimized for Mobile touch */
+.input-area {
+    padding: 12px;
+    background-color: var(--card-bg);
+    display: flex;
+    gap: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+input[type="text"], input[type="tel"] {
+    flex: 1;
+    padding: 12px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 20px;
+    outline: none;
+    font-size: 14px;
+}
+
+button {
+    cursor: pointer;
+    font-weight: bold;
+    border: none;
+}
+
+.send-btn {
+    background-color: var(--accent-color);
+    color: #0b0f19;
+    padding: 0 20px;
+    border-radius: 20px;
+    font-size: 14px;
+}
+
+.icon-btn {
+    background: transparent;
+    font-size: 18px;
+    padding: 5px;
+}
+
+.action-btn {
+    background-color: var(--accent-color);
+    color: #0b0f19;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 13px;
+}
+
+/* PREMIUM POP-UP MODAL STYLING */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.modal-box {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 320px;
+    text-align: center;
+}
+
+.modal-box h4 {
+    margin: 0 0 10px 0;
+    font-size: 18px;
+}
+
+.modal-box p {
+    font-size: 13px;
+    color: var(--system-text);
+    margin: 0 0 15px 0;
+}
+
+.modal-box input {
+    width: 100%;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.modal-actions button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.cancel-btn {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+
+.confirm-btn {
+    background-color: var(--accent-color);
+    color: #0b0f19;
+}
+
+/* Login Screen Positioning */
+.login-box {
+    margin: auto;
+    background-color: var(--card-bg);
+    padding: 30px 20px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+    width: 90%;
+    max-width: 340px;
+}
+
+.login-box input {
+    width: 100%;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+}
+
+.login-box button {
+    width: 100%;
+    border-radius: 8px;
+}
