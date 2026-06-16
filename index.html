@@ -9,7 +9,6 @@
 </head>
 <body class="dark-theme" onload="checkAppLock()">
 
-    <!-- APP LOCK SCREEN -->
     <div id="lock-screen" class="screen modal-overlay hidden">
         <div class="modal-box">
             <h4>🔒 SuperViva App Lock</h4>
@@ -19,7 +18,6 @@
         </div>
     </div>
 
-    <!-- SCREEN 1: Secure Login -->
     <div id="login-screen" class="screen">
         <div class="login-box">
             <h2>👻 SuperViva Ghost Mesh</h2>
@@ -31,7 +29,6 @@
         </div>
     </div>
 
-    <!-- SCREEN 2: Main Live Mesh Chat Wall -->
     <div id="wall-screen" class="screen hidden">
         <header>
             <div class="header-left">
@@ -65,16 +62,15 @@
             ⚠️ NEXT MESSAGE WILL BE SENT AS 'VIEW ONCE' (SECRET)
         </div>
 
-        <div class="input-area">
+        <div class="chat-input-area">
             <button onclick="triggerFileAttachment()" class="icon-btn" title="Share Media/Files">📎</button>
             <button id="view-once-btn" onclick="toggleViewOnceMode()" class="icon-btn" style="color: #9ca3af;" title="Toggle View Once">❶</button>
             <input type="text" id="msg-input" placeholder="Type a message...">
             <button id="voice-record-btn" onclick="toggleVoiceRecord()" class="icon-btn" style="color: #ef4444;" title="Record Voice">🎙️</button>
-            <button onclick="sendMessage()" class="send-btn">Send</button>
+            <button onclick="sendMessage()" id="send-btn">🚀</button>
         </div>
     </div>
 
-    <!-- POP-UP MODAL for Connecting Peer -->
     <div id="connect-modal" class="modal-overlay hidden">
         <div class="modal-box">
             <h4>Connect to a Peer Node</h4>
@@ -87,7 +83,6 @@
         </div>
     </div>
 
-    <!-- REACTION MODAL PANEL -->
     <div id="reaction-modal" class="modal-overlay hidden" onclick="closeReactionModal()">
         <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 260px; padding: 15px;">
             <h5 style="margin: 0 0 10px 0;">React to Message</h5>
@@ -103,7 +98,6 @@
         </div>
     </div>
 
-    <!-- LIVE CALLING INTERFACE SCREEN -->
     <div id="call-screen" class="screen modal-overlay hidden">
         <div class="modal-box" style="max-width: 400px; width: 95%; background: #0b0f19; border: 2px solid var(--accent-color); position: relative;">
             <h4 id="call-status-label">📞 P2P Outgoing Call...</h4>
