@@ -68,12 +68,42 @@ header {
 }
 
 .card {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
     padding: 10px 14px;
     border-radius: 12px;
-    max-width: 80%;
+    max-width: 75%;
     width: fit-content;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Chat Alignment & Colors for Real WhatsApp Look */
+.card.outgoing {
+    margin-left: auto; /* Push to the right side */
+    background-color: #005c4b; /* Dark green WhatsApp-like bubble */
+    color: #ffffff;
+    border-top-right-radius: 2px;
+    border: none;
+}
+
+body.light-theme .card.outgoing {
+    background-color: #d9fdd3; /* Light green WhatsApp-like bubble */
+    color: #111b21;
+}
+
+.card.incoming {
+    margin-right: auto; /* Push to the left side */
+    background-color: #202c33; /* Dark grey bubble */
+    border-top-left-radius: 2px;
+    border: none;
+}
+
+body.light-theme .card.incoming {
+    background-color: #ffffff; /* Pure white bubble */
+    color: #111b21;
+}
+
+/* Reverse layout for outgoing messages to show text then avatar */
+.card.outgoing-row {
+    flex-direction: row-reverse !important;
 }
 
 .sender {
@@ -97,7 +127,6 @@ header {
     margin: 5px 0;
 }
 
-/* Bottom Input Area optimized for Mobile touch */
 .input-area {
     padding: 12px;
     background-color: var(--card-bg);
@@ -145,7 +174,6 @@ button {
     font-size: 13px;
 }
 
-/* PREMIUM POP-UP MODAL STYLING */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -212,7 +240,6 @@ button {
     color: #0b0f19;
 }
 
-/* Login Screen Positioning */
 .login-box {
     margin: auto;
     background-color: var(--card-bg);
