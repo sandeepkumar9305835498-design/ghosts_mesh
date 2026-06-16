@@ -66,7 +66,7 @@ header {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding-bottom: 80px; /* इनपुट बॉक्स के लिए जगह */
+    padding-bottom: 80px;
 }
 
 .card {
@@ -140,7 +140,6 @@ body.light-theme .card.incoming {
     margin: 5px 0;
 }
 
-/* चैट इनपुट एरिया को नीचे फिक्स करने की एकदम सही स्टाइलिंग */
 .chat-input-area {
     position: fixed;
     bottom: 0;
@@ -189,6 +188,8 @@ body.light-theme .card.incoming {
     padding: 6px 12px;
     border-radius: 15px;
     font-size: 13px;
+    border: none;
+    cursor: pointer;
 }
 
 .modal-overlay {
@@ -216,6 +217,20 @@ body.light-theme .card.incoming {
     text-align: center;
 }
 
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    justify-content: center;
+}
+
+.cancel-btn, .confirm-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
 .cancel-btn {
     background-color: transparent;
     border: 1px solid var(--border-color);
@@ -225,6 +240,7 @@ body.light-theme .card.incoming {
 .confirm-btn {
     background-color: var(--accent-color);
     color: #0b0f19;
+    border: none;
 }
 
 .login-box {
@@ -239,6 +255,25 @@ body.light-theme .card.incoming {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.login-box input {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.login-box button {
+    background: var(--accent-color);
+    color: #0b0f19;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
 }
 
 .shared-img, .shared-video {
