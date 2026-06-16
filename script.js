@@ -180,10 +180,19 @@ function triggerDeleteForEveryone() {
     }
 }
 
-// 9. LIVE P2P VOICE AND VIDEO CALLING ENGINE (WebRTC Implementation)
+function renderDeleteLocal(msgId) {
+    const card = document.getElementById(msgId);
+    if (!card) return;
+    const txtNode = card.querySelector(".msg-text-content");
+    if (txtNode) { txtNode.innerText = "🚫 This message was deleted"; txtNode.style.fontStyle = "italic"; txtNode.style.opacity = "0.5"; }
+    const mediaContainer = card.querySelector(".media-container");
+    if (mediaContainer) mediaContainer.remove();
+}
+
+// 9. LIVE P2P VOICE AND VIDEO CALLING ENGINE
 function initiateP2PCall(callType) {
     if (activeConnections.length === 0) { alert("Please connect to a live peer node first before calling."); return; }
-    const targetPeerNodeID = activeConnections[0].peer; // Calls your actively connected node
+    const targetPeerNodeID = activeConnections[0].peer;
 
     document.getElementById("call-screen").classList.remove("hidden");
     document.getElementById("call-status-label").innerText = `📞 Outgoing P2P ${callType === 'video' ? 'Video' : 'Voice'} Call...`;
@@ -198,7 +207,6 @@ function initiateP2PCall(callType) {
             document.getElementById("local-video").srcObject = stream;
         }
         
-        // Initiate the WebRTC call channel via PeerJS
         activeP2PCallInstance = myPeerInstance.call(targetPeerNodeID, stream, { metadata: { type: callType } });
         attachCallStreamListeners(activeP2PCallInstance);
     }).catch(err => {
@@ -215,7 +223,6 @@ function attachCallStreamListeners(callObj) {
             document.getElementById("video-grid").classList.remove("hidden");
             document.getElementById("remote-video").srcObject = remoteStream;
         } else {
-            // Voice call setup attaches audio feed invisibly
             document.getElementById("remote-video").srcObject = remoteStream;
             document.getElementById("video-grid").classList.add("hidden");
         }
@@ -277,8 +284,6 @@ function initializeMeshNetwork() {
     myPeerInstance = new Peer(userGhostID);
     myPeerInstance.on('open', (id) => updateSystemStatus("System: Broadcast node live. ID: " + id));
     myPeerInstance.on('connection', (incomingConn) => setupConnectionListeners(incomingConn));
-    
-    // Listen for incoming audio/video call handshakes
     myPeerInstance.on('call', (incomingCall) => handleIncomingCallSetup(incomingCall));
     myPeerInstance.on('error', () => updateSystemStatus("Mesh networking handshake syncing..."));
 }
@@ -331,15 +336,6 @@ function setupConnectionListeners(conn) {
     conn.on('close', () => { activeConnections = activeConnections.filter(c => c.peer !== conn.peer); });
 }
 
-function renderDeleteLocal(msgId) {
-    const card = document.getElementById(msgId);
-    if (!card) return;
-    const txtNode = card.querySelector(".msg-text-content");
-    if (txtNode) { txtNode.innerText = "🚫 This message was deleted"; txtNode.style.fontStyle = "italic"; txtNode.style.opacity = "0.5"; }
-    const mediaNode = card.querySelector(".media-content");
-    if (mediaNode) mediaNode.remove();
-}
-
 // 11. Transmission Systems
 function sendMessage() {
     const msgInput = document.getElementById("msg-input");
@@ -367,7 +363,7 @@ function sendMessageBundle(contentType, payload) {
 
 function broadcastToMesh(obj) { activeConnections.forEach(conn => { if (conn.open) conn.send(obj); }); }
 
-// 12. UI Architecture Layout Rendering Engine
+// 12. UI Layout Rendering Engine
 function appendMessage(sender, text, direction, msgId, avatarSrc, contentType, mediaPayload, viewOnce) {
     const container = document.getElementById("messages-container");
     const card = document.createElement("div");
@@ -417,13 +413,40 @@ function appendMessage(sender, text, direction, msgId, avatarSrc, contentType, m
     container.scrollTop = container.scrollHeight;
 }
 
+// 13. Dynamic Media Rendering Engine with Native Download Features
 function renderActualMedia(targetNode, type, payload) {
     if (type === "media" && payload) {
-        if (payload.fileType.startsWith("image/")) { targetNode.innerHTML += `<img src="${payload.fileData}" class="shared-img media-content">`; } 
-        else if (payload.fileType.startsWith("video/")) { targetNode.innerHTML += `<video src="${payload.fileData}" controls class="shared-video media-content"></video>`; } 
-        else { targetNode.innerHTML += `<div class="media-content" style="margin-top:5px;"><a href="${payload.fileData}" download="${payload.fileName}" style="color:#00f2fe; text-decoration:underline;">📁 ${payload.fileName}</a></div>`; }
-    } else if (type === "audio" && payload) {
-        targetNode.innerHTML += `<audio src="${payload}" controls class="media-content" style="margin-top:5px; max-width:220px;"></audio>`;
+        if (payload.fileType.startsWith("image/")) { 
+            targetNode.innerHTML += `
+                <div class="media-container" style="margin-top:5px;">
+                    <img src="${payload.fileData}" class="shared-img">
+                    <br>
+                    <a href="${payload.fileData}" download="${payload.fileName || 'SuperViva_Image.png'}" style="display:inline-block; margin-top:5px; color:#00f2fe; text-decoration:none; font-size:12px; font-weight:bold;">⬇️ Download Image</a>
+                </div>`;
+        } 
+        else if (payload.fileType.startsWith("video/")) { 
+            targetNode.innerHTML += `
+                <div class="media-container" style="margin-top:5px;">
+                    <video src="${payload.fileData}" controls class="shared-video"></video>
+                    <br>
+                    <a href="${payload.fileData}" download="${payload.fileName || 'SuperViva_Video.mp4'}" style="display:inline-block; margin-top:5px; color:#00f2fe; text-decoration:none; font-size:12px; font-weight:bold;">⬇️ Download Video</a>
+                </div>`;
+        } 
+        else { 
+            targetNode.innerHTML += `
+                <div class="media-container" style="margin-top:5px;">
+                    <a href="${payload.fileData}" download="${payload.fileName}" style="color:#00f2fe; text-decoration:underline; font-weight:bold;">📁 ${payload.fileName}</a>
+                    <br>
+                    <a href="${payload.fileData}" download="${payload.fileName}" style="display:inline-block; margin-top:5px; color:#22c55e; text-decoration:none; font-size:12px; font-weight:bold;">⬇️ Download File</a>
+                </div>`;
+        }
+    } 
+    else if (type === "audio" && payload) {
+        targetNode.innerHTML += `
+            <div class="media-container" style="margin-top:5px;">
+                <audio src="${payload}" controls style="max-width:220px; display:block;"></audio>
+                <a href="${payload}" download="SuperViva_Voice.ogg" style="display:inline-block; margin-top:5px; color:#00f2fe; text-decoration:none; font-size:12px; font-weight:bold;">⬇️ Download Audio</a>
+            </div>`;
     }
 }
 
