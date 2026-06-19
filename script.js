@@ -1,655 +1,860 @@
-// ─── Global App State ──────────────────────────────────────────────────────────
-let userPhoneNumber = "";
-let userGhostID = "";
+// ===== GHOST MESH V2 - COMPLETE SCRIPT =====
+
+// State
+let userPhoneNumber = "", userGhostID = "", userCurrentDP = "";
 let myPeerInstance = null;
 let activeConnections = [];
+let chatData = {}; // { peerId: { messages:[], unread:0, lastMsg:'', lastTime:'', dp:'' } }
+let currentChatPeer = null;
 let typingTimeout = null;
-let userCurrentDP = "https://api.dicebear.com/7.x/bottts/svg?seed=ghost";
-
-// Radar Map
-let radarMapInstance = null;
-let currentMapMarker = null;
 let pendingIncomingConnection = null;
-
-// Messaging Feature Flags
 let isViewOnceEnabled = false;
-let mediaRecorderInstance = null;
-let recordedAudioChunks = [];
-let isRecordingAudio = false;
+let mediaRecorderInstance = null, recordedAudioChunks = [], isRecordingAudio = false;
 let selectedMsgIdForContext = null;
+let localMediaStream = null, activeP2PCallInstance = null, pendingIncomingCallEvent = null;
+let radarMapInstance = null, sosMapInstance = null;
+let sosActive = false, sosInterval = null;
+let userLat = 20.5937, userLng = 78.9629;
+let pinBuffer = "";
+let liveLocationInterval = null;
 
-// P2P Call State
-let localMediaStream = null;
-let activeP2PCallInstance = null;
-let pendingIncomingCallEvent = null;
+const bannedWords = ["blackmail", "paisa do", "rupay do", "video leak", "threat", "leak"];
 
-// Safety filter
-const bannedWords = ["blackmail", "blakmail", "paisa do", "rupay do", "video leak", "threat", "money", "leak"];
-
-// ─── 1. App Lock ───────────────────────────────────────────────────────────────
+// ===== APP LOCK =====
 function checkAppLock() {
-    const savedPin = localStorage.getItem("ghostmesh_app_pin");
-    if (savedPin) {
-        showScreen("lock-screen");
-    } else {
-        const savedPhone = localStorage.getItem("ghostmesh_saved_phone");
-        if (savedPhone) {
-            showScreen("wall-screen");
-            executeLoginSequence(savedPhone);
-        } else {
-            showScreen("login-screen");
-        }
+    const pin = localStorage.getItem("gm_pin");
+    if (pin) { showEl("lock-screen"); } 
+    else {
+        const phone = localStorage.getItem("gm_phone");
+        if (phone) executeLogin(phone);
+        else showEl("login-screen");
     }
 }
 
-function unlockApp() {
-    const pinInput = document.getElementById("app-pin-input").value;
-    const savedPin = localStorage.getItem("ghostmesh_app_pin");
-    if (pinInput === savedPin) {
-        document.getElementById("app-pin-input").value = "";
-        const savedPhone = localStorage.getItem("ghostmesh_saved_phone");
-        if (savedPhone) {
-            showScreen("wall-screen");
-            executeLoginSequence(savedPhone);
-        } else {
-            showScreen("login-screen");
-        }
+function pinPress(digit) {
+    if (pinBuffer.length >= 4) return;
+    pinBuffer += digit;
+    updatePinDots();
+    if (pinBuffer.length === 4) setTimeout(checkPin, 150);
+}
+
+function pinBackspace() {
+    pinBuffer = pinBuffer.slice(0, -1);
+    updatePinDots();
+}
+
+function updatePinDots() {
+    const dots = document.querySelectorAll("#pin-dots span");
+    dots.forEach((d, i) => d.classList.toggle("filled", i < pinBuffer.length));
+}
+
+function checkPin() {
+    const saved = localStorage.getItem("gm_pin");
+    if (pinBuffer === saved) {
+        hideEl("lock-screen");
+        const phone = localStorage.getItem("gm_phone");
+        if (phone) executeLogin(phone); else showEl("login-screen");
     } else {
-        document.getElementById("app-pin-input").value = "";
-        showToast("❌ Wrong PIN. Try again.");
+        pinBuffer = "";
+        updatePinDots();
+        showToast("❌ Wrong PIN");
     }
 }
 
-// ─── 2. Authentication ─────────────────────────────────────────────────────────
+// ===== LOGIN =====
 function verifyAndLogin() {
-    const phoneInput = document.getElementById("phone-number").value.trim();
-    const pinSetup = document.getElementById("set-pin-input").value.trim();
-    if (phoneInput === "" || phoneInput.length < 10) {
-        showToast("⚠️ Enter a valid phone number.");
-        return;
-    }
-    if (pinSetup.length === 4) localStorage.setItem("ghostmesh_app_pin", pinSetup);
-    localStorage.setItem("ghostmesh_saved_phone", phoneInput);
-    showScreen("wall-screen");
-    executeLoginSequence(phoneInput);
+    const phone = document.getElementById("phone-number").value.trim();
+    const pin = document.getElementById("set-pin-input").value.trim();
+    if (!phone || phone.length < 6) { showToast("Enter a valid phone number"); return; }
+    if (pin.length === 4) localStorage.setItem("gm_pin", pin);
+    localStorage.setItem("gm_phone", phone);
+    executeLogin(phone);
 }
 
-function executeLoginSequence(phone) {
+function executeLogin(phone) {
     userPhoneNumber = phone;
     userGhostID = "Ghost-" + phone.slice(-4);
-
-    document.getElementById("user-badge").innerText = userGhostID;
     userCurrentDP = "https://api.dicebear.com/7.x/bottts/svg?seed=" + userGhostID;
-    document.getElementById("my-dp-display").src = userCurrentDP;
 
-    initializeMeshNetwork();
-    setupTypingListener();
+    hideEl("login-screen"); hideEl("lock-screen");
+    showEl("app-shell");
+    showScreen("chatlist-screen");
+
+    document.getElementById("my-ghost-id-label").innerText = userGhostID;
+    document.getElementById("my-dp-chatlist").src = userCurrentDP;
+    document.getElementById("profile-dp-big").src = userCurrentDP;
+    document.getElementById("profile-ghost-id").innerText = userGhostID;
+    document.getElementById("profile-phone").innerText = phone;
+
+    initMesh();
     initRadarMap();
+    fetchSOSInfo();
 }
 
-// ─── 3. Screen Manager ─────────────────────────────────────────────────────────
+function logoutApp() {
+    if (!confirm("Logout from Ghost Mesh?")) return;
+    localStorage.removeItem("gm_phone");
+    localStorage.removeItem("gm_pin");
+    location.reload();
+}
+
+// ===== SCREEN NAV =====
 function showScreen(id) {
-    ["lock-screen", "login-screen", "wall-screen"].forEach(s => {
-        const el = document.getElementById(s);
-        if (el) {
-            if (s === id) el.classList.remove("hidden");
-            else el.classList.add("hidden");
-        }
-    });
+    document.querySelectorAll(".app-screen").forEach(s => s.classList.add("hidden"));
+    document.getElementById(id).classList.remove("hidden");
 }
 
-// ─── 4. Radar Map ──────────────────────────────────────────────────────────────
-function initRadarMap() {
+function showEl(id) { document.getElementById(id).classList.remove("hidden"); }
+function hideEl(id) { document.getElementById(id).classList.add("hidden"); }
+
+function openProfile() {
+    closeAllMenus();
+    showScreen("profile-screen");
+}
+function closeProfile() { showScreen("chatlist-screen"); }
+
+function openSOS() {
+    closeAllMenus();
+    showScreen("sos-screen");
+    initSOSMap();
+    fetchSOSInfo();
+}
+function closeSOS() { showScreen("chatlist-screen"); }
+
+function goBackToList() {
+    currentChatPeer = null;
+    showScreen("chatlist-screen");
+    renderChatList();
+}
+
+// ===== MESH NETWORK =====
+function initMesh() {
     try {
-        if (radarMapInstance) {
-            radarMapInstance.remove();
-            radarMapInstance = null;
-        }
-        radarMapInstance = L.map('live-radar-map').setView([20.5937, 78.9629], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(radarMapInstance);
-
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((pos) => {
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
-                radarMapInstance.setView([lat, lng], 13);
-                currentMapMarker = L.marker([lat, lng]).addTo(radarMapInstance)
-                    .bindPopup(`<b>👻 ${userGhostID}</b><br>Your node is active here.`).openPopup();
-                simulateNearbyMeshUsers(lat, lng);
-            }, () => {
-                simulateNearbyMeshUsers(20.5937, 78.9629);
-            });
-        } else {
-            simulateNearbyMeshUsers(20.5937, 78.9629);
-        }
-    } catch (e) {
-        console.error("Map init failed:", e);
-    }
+        myPeerInstance = new Peer(userGhostID);
+        myPeerInstance.on('open', id => {
+            document.getElementById("my-ghost-id-label").innerText = id;
+            showToast("✅ Ghost Mesh Live: " + id);
+        });
+        myPeerInstance.on('connection', conn => {
+            handleIncomingRequest(conn);
+            setupConn(conn);
+        });
+        myPeerInstance.on('call', call => handleIncomingCall(call));
+        myPeerInstance.on('error', err => {
+            if (err.type === 'unavailable-id') {
+                userGhostID = "Ghost-" + Math.floor(1000 + Math.random() * 9000);
+                document.getElementById("my-ghost-id-label").innerText = userGhostID;
+                initMesh();
+            } else { showToast("⚠️ Network issue, retrying..."); }
+        });
+    } catch(e) { console.error(e); }
 }
 
-function toggleMapVisibility() {
-    const mapDiv = document.getElementById("map-container");
-    if (mapDiv.classList.contains("hidden")) {
-        mapDiv.classList.remove("hidden");
-        if (radarMapInstance) setTimeout(() => radarMapInstance.invalidateSize(), 300);
-    } else {
-        mapDiv.classList.add("hidden");
-    }
-}
-
-function simulateNearbyMeshUsers(lat, lng) {
-    const dummyNodes = [
-        { id: "Ghost-4683", latOffset: 0.005, lngOffset: 0.003 },
-        { id: "Ghost-7446", latOffset: -0.004, lngOffset: -0.006 },
-        { id: "Ghost-9122", latOffset: 0.002, lngOffset: -0.003 }
-    ];
-    dummyNodes.forEach(node => {
-        L.marker([lat + node.latOffset, lng + node.lngOffset]).addTo(radarMapInstance)
-            .bindPopup(`
-                <b>👾 ${node.id}</b><br>
-                Status: Available<br>
-                <button class="map-connect-btn" onclick="connectToTargetPeer('${node.id}')">⚡ Connect</button>
-            `);
-    });
-}
-
-function connectToTargetPeer(targetID) {
-    if (!targetID || targetID === userGhostID) return;
-    updateSystemStatus(`📡 Sending link request to ${targetID}...`);
-    const conn = myPeerInstance.connect(targetID);
-    setupConnectionListeners(conn);
-}
-
-// ─── 5. P2P Network ────────────────────────────────────────────────────────────
-function initializeMeshNetwork() {
-    if (myPeerInstance) {
-        myPeerInstance.destroy();
-        myPeerInstance = null;
-    }
-
-    myPeerInstance = new Peer(userGhostID);
-
-    myPeerInstance.on('open', (id) => {
-        updateSystemStatus("✅ Node live. Your ID: " + id);
-    });
-
-    myPeerInstance.on('connection', (incomingConn) => {
-        handleIncomingConnectionRequest(incomingConn);
-        setupConnectionListeners(incomingConn);
-    });
-
-    myPeerInstance.on('call', (incomingCall) => handleIncomingCallSetup(incomingCall));
-
-    myPeerInstance.on('error', (err) => {
-        if (err.type === 'unavailable-id') {
-            // ID taken — retry with timestamp suffix
-            userGhostID = "Ghost-" + userPhoneNumber.slice(-4) + "-" + Date.now().toString().slice(-3);
-            document.getElementById("user-badge").innerText = userGhostID;
-            myPeerInstance = new Peer(userGhostID);
-        } else {
-            updateSystemStatus("⚠️ Network syncing...");
-        }
-    });
-}
-
-function connectFromUI() {
-    const targetID = document.getElementById("peer-id-input").value.trim();
-    if (!targetID || targetID === userGhostID) return;
-    connectToTargetPeer(targetID);
-    closeConnectModal();
-}
-
-function setupConnectionListeners(conn) {
+function setupConn(conn) {
     conn.on('open', () => {
         conn.send({ type: "dp-update", sender: userGhostID, dpData: userCurrentDP });
+        if (!chatData[conn.peer]) initChatData(conn.peer);
     });
 
-    conn.on('data', (data) => {
+    conn.on('data', data => {
         if (!data || !data.type) return;
-
-        switch (data.type) {
+        switch(data.type) {
             case "handshake-status":
                 if (data.approved) {
-                    updateSystemStatus(`🎉 Connected with ${data.sender || conn.peer}!`);
                     if (!activeConnections.some(c => c.peer === conn.peer)) activeConnections.push(conn);
+                    if (!chatData[conn.peer]) initChatData(conn.peer);
+                    addSystemMsg(conn.peer, `🎉 Connected with ${conn.peer}`);
+                    renderChatList();
+                    showToast("🎉 Connected with " + conn.peer);
                 } else {
-                    updateSystemStatus(`❌ Request rejected by ${data.sender || conn.peer}.`);
+                    showToast("❌ " + conn.peer + " rejected request");
                     conn.close();
                 }
                 break;
-
             case "chat":
-                appendMessage(data.sender, data.text, "incoming", data.msgId, data.senderDP, data.contentType, data.mediaPayload, data.viewOnce);
-                if (conn.open) conn.send({ type: "ack", msgId: data.msgId });
-                break;
-
-            case "typing":
-                const indicator = document.getElementById("typing-indicator");
-                if (data.isTyping) {
-                    indicator.innerText = `${data.sender} is typing...`;
-                    indicator.classList.remove("hidden");
+                if (!chatData[data.sender]) initChatData(data.sender);
+                const msg = { id: data.msgId, sender: data.sender, text: data.text, direction: "incoming",
+                    dp: data.senderDP, contentType: data.contentType, mediaPayload: data.mediaPayload,
+                    viewOnce: data.viewOnce, time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) };
+                chatData[data.sender].messages.push(msg);
+                chatData[data.sender].lastMsg = data.text || "📎 Media";
+                chatData[data.sender].lastTime = msg.time;
+                if (currentChatPeer !== data.sender) {
+                    chatData[data.sender].unread = (chatData[data.sender].unread || 0) + 1;
                 } else {
-                    indicator.classList.add("hidden");
+                    renderMessage(msg);
+                }
+                renderChatList();
+                if (conn.open) conn.send({ type: "ack", msgId: data.msgId });
+                if (navigator.vibrate) navigator.vibrate(50);
+                break;
+            case "typing":
+                if (currentChatPeer === data.sender) {
+                    const ind = document.getElementById("typing-indicator");
+                    if (data.isTyping) { ind.innerText = data.sender + " is typing..."; ind.classList.remove("hidden"); }
+                    else ind.classList.add("hidden");
                 }
                 break;
-
             case "ack":
-                const tick = document.getElementById(`tick-${data.msgId}`);
-                if (tick) { tick.innerText = " ✓✓"; tick.style.color = "#53bdeb"; }
+                const tick = document.getElementById("tick-" + data.msgId);
+                if (tick) { tick.innerText = "✓✓"; tick.className = "msg-tick read"; }
                 break;
-
             case "dp-update":
+                if (chatData[data.sender]) chatData[data.sender].dp = data.dpData;
                 window["dp_" + data.sender] = data.dpData;
-                document.querySelectorAll(`.msg-avatar-${data.sender}`).forEach(img => img.src = data.dpData);
+                document.querySelectorAll(".avatar-" + data.sender).forEach(img => img.src = data.dpData);
+                renderChatList();
                 break;
-
-            case "reaction":
-                renderReactionLocal(data.msgId, data.emoji);
+            case "reaction": renderReactionLocal(data.msgId, data.emoji); break;
+            case "delete": renderDeleteLocal(data.msgId); break;
+            case "location":
+                showToast(`📍 ${data.sender} shared location`);
+                if (currentChatPeer === data.sender) {
+                    const locMsg = { id: "loc-" + Date.now(), sender: data.sender, text: `📍 Live Location\nLat: ${data.lat.toFixed(5)}, Lng: ${data.lng.toFixed(5)}`, direction: "incoming",
+                        dp: data.senderDP, contentType: "text", time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) };
+                    chatData[data.sender].messages.push(locMsg);
+                    renderMessage(locMsg);
+                }
                 break;
-
-            case "delete":
-                renderDeleteLocal(data.msgId);
+            case "sos":
+                showToast("🆘 SOS from " + data.sender + "!");
+                showNearbyAlert(data);
                 break;
         }
     });
 
     conn.on('close', () => {
         activeConnections = activeConnections.filter(c => c.peer !== conn.peer);
-        updateSystemStatus(`🔌 ${conn.peer} disconnected.`);
-    });
-
-    conn.on('error', (err) => {
-        console.error("Connection error:", err);
+        if (chatData[conn.peer]) addSystemMsg(conn.peer, "🔌 " + conn.peer + " disconnected");
+        renderChatList();
     });
 }
 
-// ─── 6. Accept / Reject Connections ───────────────────────────────────────────
-function handleIncomingConnectionRequest(conn) {
+function initChatData(peerId) {
+    if (!chatData[peerId]) {
+        chatData[peerId] = {
+            messages: [],
+            unread: 0,
+            lastMsg: "",
+            lastTime: "",
+            dp: window["dp_" + peerId] || "https://api.dicebear.com/7.x/bottts/svg?seed=" + peerId,
+            muted: false
+        };
+    }
+}
+
+function addSystemMsg(peerId, text) {
+    if (!chatData[peerId]) initChatData(peerId);
+    chatData[peerId].messages.push({ id: "sys-" + Date.now(), type: "system", text });
+    if (currentChatPeer === peerId) {
+        const container = document.getElementById("messages-container");
+        const div = document.createElement("div");
+        div.className = "date-chip";
+        div.innerHTML = `<span>${text}</span>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+// ===== CONNECT =====
+function openNewConnect() { closeAllMenus(); showEl("connect-modal"); }
+function closeNewConnect() { hideEl("connect-modal"); document.getElementById("peer-id-input").value = ""; }
+
+function connectFromUI() {
+    const id = document.getElementById("peer-id-input").value.trim();
+    if (!id || id === userGhostID) { showToast("Enter a valid Ghost ID"); return; }
+    connectToPeer(id);
+    closeNewConnect();
+}
+
+function connectToPeer(targetID) {
+    if (!myPeerInstance) { showToast("Not connected yet"); return; }
+    showToast("Connecting to " + targetID + "...");
+    const conn = myPeerInstance.connect(targetID);
+    setupConn(conn);
+}
+
+// ===== ACCEPT / REJECT =====
+function handleIncomingRequest(conn) {
     pendingIncomingConnection = conn;
-    document.getElementById("request-modal-text").innerText =
-        `${conn.peer} wants to link with your secure node. Accept?`;
-    document.getElementById("request-modal").classList.remove("hidden");
+    document.getElementById("request-modal-text").innerText = conn.peer + " wants to connect with you.";
+    showEl("request-modal");
 }
 
 function acceptConnectionRequest() {
-    document.getElementById("request-modal").classList.add("hidden");
-    if (pendingIncomingConnection) {
-        const peer = pendingIncomingConnection.peer;
-        pendingIncomingConnection.send({ type: "handshake-status", approved: true, sender: userGhostID });
-        if (!activeConnections.some(c => c.peer === peer)) activeConnections.push(pendingIncomingConnection);
-        updateSystemStatus(`✅ Linked with ${peer}`);
-        pendingIncomingConnection = null;
-    }
+    hideEl("request-modal");
+    if (!pendingIncomingConnection) return;
+    if (!activeConnections.some(c => c.peer === pendingIncomingConnection.peer)) activeConnections.push(pendingIncomingConnection);
+    initChatData(pendingIncomingConnection.peer);
+    pendingIncomingConnection.send({ type: "handshake-status", approved: true, sender: userGhostID });
+    addSystemMsg(pendingIncomingConnection.peer, "🎉 Connected with " + pendingIncomingConnection.peer);
+    renderChatList();
+    showToast("✅ Accepted " + pendingIncomingConnection.peer);
+    pendingIncomingConnection = null;
 }
 
 function rejectConnectionRequest() {
-    document.getElementById("request-modal").classList.add("hidden");
-    if (pendingIncomingConnection) {
-        pendingIncomingConnection.send({ type: "handshake-status", approved: false, sender: userGhostID });
-        setTimeout(() => { if (pendingIncomingConnection) { pendingIncomingConnection.close(); pendingIncomingConnection = null; } }, 500);
-        updateSystemStatus("❌ Request rejected.");
-    }
+    hideEl("request-modal");
+    if (!pendingIncomingConnection) return;
+    pendingIncomingConnection.send({ type: "handshake-status", approved: false, sender: userGhostID });
+    setTimeout(() => { if (pendingIncomingConnection) pendingIncomingConnection.close(); pendingIncomingConnection = null; }, 500);
 }
 
-// ─── 7. Messaging ──────────────────────────────────────────────────────────────
-function sendMessage() {
-    const msgInput = document.getElementById("msg-input");
-    const txt = msgInput.value.trim();
-    if (txt === "") return;
-    const lower = txt.toLowerCase();
-    for (const word of bannedWords) {
-        if (lower.includes(word)) {
-            showToast("⚠️ Security Violation! Message blocked.");
-            msgInput.value = "";
-            return;
-        }
+// ===== CHAT LIST =====
+function renderChatList() {
+    const container = document.getElementById("chat-list-container");
+    const empty = document.getElementById("empty-state");
+    const peers = Object.keys(chatData);
+
+    if (peers.length === 0) {
+        empty.style.display = "flex";
+        return;
     }
-    sendMessageBundle("text", txt);
-    msgInput.value = "";
-}
+    empty.style.display = "none";
 
-function sendMessageBundle(contentType, payload) {
-    const msgId = "msg-" + Date.now();
-    const textDisplay = contentType === "text" ? payload : "";
-
-    appendMessage(userGhostID, textDisplay, "outgoing", msgId, userCurrentDP, contentType, payload, isViewOnceEnabled);
-    broadcastToMesh({
-        type: "chat", msgId, sender: userGhostID,
-        text: textDisplay, senderDP: userCurrentDP,
-        contentType, mediaPayload: payload,
-        viewOnce: isViewOnceEnabled
+    // Sort by last time
+    peers.sort((a, b) => {
+        const ta = chatData[a].lastTime || "";
+        const tb = chatData[b].lastTime || "";
+        return tb.localeCompare(ta);
     });
-    if (isViewOnceEnabled) toggleViewOnceMode();
+
+    // Remove old items (keep empty state)
+    container.querySelectorAll(".chat-item").forEach(el => el.remove());
+
+    peers.forEach(peerId => {
+        const data = chatData[peerId];
+        const isOnline = activeConnections.some(c => c.peer === peerId);
+        const item = document.createElement("div");
+        item.className = "chat-item";
+        item.id = "chatitem-" + peerId;
+        item.onclick = () => openChat(peerId);
+        item.innerHTML = `
+            <div class="chat-item-avatar">
+                <img src="${data.dp || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + peerId}" class="chat-item-dp avatar-${peerId}">
+                ${isOnline ? '<span class="online-dot"></span>' : ''}
+            </div>
+            <div class="chat-item-body">
+                <div class="chat-item-top">
+                    <span class="chat-item-name">${peerId}</span>
+                    <span class="chat-item-time">${data.lastTime || ''}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span class="chat-item-preview">${data.lastMsg || 'Tap to chat'}</span>
+                    ${data.unread > 0 ? `<span class="unread-badge">${data.unread}</span>` : ''}
+                </div>
+            </div>`;
+        container.appendChild(item);
+    });
 }
 
-function broadcastToMesh(obj) {
-    activeConnections.forEach(conn => { if (conn && conn.open) conn.send(obj); });
+function filterChats(query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll(".chat-item").forEach(item => {
+        item.style.display = item.id.toLowerCase().includes(q) ? "" : "none";
+    });
 }
 
-function appendMessage(sender, text, direction, msgId, avatarSrc, contentType, mediaPayload, viewOnce) {
+function openChat(peerId) {
+    currentChatPeer = peerId;
+    if (!chatData[peerId]) initChatData(peerId);
+    chatData[peerId].unread = 0;
+
+    document.getElementById("chat-peer-name").innerText = peerId;
+    const dp = chatData[peerId].dp || "https://api.dicebear.com/7.x/bottts/svg?seed=" + peerId;
+    document.getElementById("chat-peer-dp").src = dp;
+    document.getElementById("call-peer-dp").src = dp;
+    const isOnline = activeConnections.some(c => c.peer === peerId);
+    document.getElementById("chat-peer-status").innerText = isOnline ? "🟢 P2P Connected" : "⚫ Offline";
+
+    showScreen("chat-screen");
+    renderAllMessages(peerId);
+    document.getElementById("msg-input").focus();
+}
+
+function renderAllMessages(peerId) {
     const container = document.getElementById("messages-container");
+    container.innerHTML = '<div class="date-chip"><span>Today</span></div>';
+    (chatData[peerId]?.messages || []).forEach(msg => {
+        if (msg.type === "system") {
+            const div = document.createElement("div");
+            div.className = "date-chip";
+            div.innerHTML = `<span>${msg.text}</span>`;
+            container.appendChild(div);
+        } else {
+            renderMessage(msg);
+        }
+    });
+    container.scrollTop = container.scrollHeight;
+}
 
+// ===== MESSAGING =====
+function sendMessage() {
+    const input = document.getElementById("msg-input");
+    const txt = input.value.trim();
+    if (!txt) return;
+
+    for (const w of bannedWords) {
+        if (txt.toLowerCase().includes(w)) { showToast("⚠️ Message blocked by safety filter"); input.value = ""; return; }
+    }
+
+    sendBundle("text", txt);
+    input.value = "";
+}
+
+function sendBundle(contentType, payload) {
+    const msgId = "msg-" + Date.now();
+    const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const text = contentType === "text" ? payload : "";
+
+    const msg = { id: msgId, sender: userGhostID, text, direction: "outgoing",
+        dp: userCurrentDP, contentType, mediaPayload: payload, viewOnce: isViewOnceEnabled, time };
+
+    if (currentChatPeer) {
+        if (!chatData[currentChatPeer]) initChatData(currentChatPeer);
+        chatData[currentChatPeer].messages.push(msg);
+        chatData[currentChatPeer].lastMsg = text || "📎 Media";
+        chatData[currentChatPeer].lastTime = time;
+        renderMessage(msg);
+    }
+
+    broadcastToMesh({ type: "chat", msgId, sender: userGhostID, text,
+        senderDP: userCurrentDP, contentType, mediaPayload: payload, viewOnce: isViewOnceEnabled });
+
+    if (isViewOnceEnabled) toggleViewOnceMode();
+    renderChatList();
+}
+
+function renderMessage(msg) {
+    const container = document.getElementById("messages-container");
     const card = document.createElement("div");
-    card.id = msgId;
-    card.setAttribute("data-sender", sender);
-    card.className = `card ${direction}`;
-    card.onclick = () => openReactionModal(msgId);
+    card.id = msg.id;
+    card.setAttribute("data-sender", msg.sender);
+    card.className = "card " + (msg.direction === "outgoing" ? "outgoing" : "incoming");
+    card.onclick = () => openReactionModal(msg.id);
 
-    // Avatar (only for incoming)
-    if (direction === "incoming") {
+    if (msg.direction === "incoming") {
         const img = document.createElement("img");
-        img.src = avatarSrc || window["dp_" + sender] || `https://api.dicebear.com/7.x/bottts/svg?seed=${sender}`;
-        img.className = `msg-avatar-${sender}`;
-        img.style.cssText = "width:28px;height:28px;border-radius:50%;flex-shrink:0;object-fit:cover;align-self:flex-end;";
+        img.src = msg.dp || window["dp_" + msg.sender] || "https://api.dicebear.com/7.x/bottts/svg?seed=" + msg.sender;
+        img.className = "msg-avatar avatar-" + msg.sender;
         card.appendChild(img);
     }
 
-    // Content wrapper
-    const contentDiv = document.createElement("div");
-    contentDiv.style.maxWidth = "100%";
+    const body = document.createElement("div");
+    body.style.flex = "1";
 
-    // Sender name (only for incoming)
-    if (direction === "incoming") {
-        const senderDiv = document.createElement("div");
-        senderDiv.className = "sender";
-        senderDiv.innerText = sender;
-        contentDiv.appendChild(senderDiv);
+    if (msg.direction === "incoming") {
+        const sender = document.createElement("div");
+        sender.className = "sender";
+        sender.innerText = msg.sender;
+        body.appendChild(sender);
     }
 
-    // Text node
     const txtNode = document.createElement("div");
     txtNode.className = "msg-text-content";
 
-    if (viewOnce && direction === "incoming") {
-        txtNode.innerHTML = `<span style="color:var(--accent-bright);font-weight:600;">👁 View Once</span>`;
-        const btn = document.createElement("button");
-        btn.innerText = "Tap to view";
-        btn.className = "confirm-btn";
-        btn.style.cssText = "margin-top:6px;padding:5px 12px;font-size:12px;";
-        btn.onclick = (e) => {
+    if (msg.viewOnce && msg.direction === "incoming") {
+        txtNode.innerText = "👁️ Tap to view (disappears after)";
+        txtNode.style.cssText = "color:var(--accent);font-style:italic;cursor:pointer;";
+        txtNode.onclick = e => {
             e.stopPropagation();
-            txtNode.innerHTML = text || "";
-            renderActualMedia(txtNode, contentType, mediaPayload);
-            btn.remove();
+            txtNode.innerText = msg.text;
+            txtNode.style.cssText = "";
+            renderMedia(txtNode, msg.contentType, msg.mediaPayload);
         };
-        txtNode.appendChild(btn);
     } else {
-        txtNode.innerText = text || "";
-        renderActualMedia(txtNode, contentType, mediaPayload);
+        txtNode.innerText = msg.text;
+        renderMedia(txtNode, msg.contentType, msg.mediaPayload);
     }
+    body.appendChild(txtNode);
 
-    contentDiv.appendChild(txtNode);
+    const timeRow = document.createElement("div");
+    timeRow.className = "msg-time-row";
+    const timeEl = document.createElement("span");
+    timeEl.className = "msg-time";
+    timeEl.innerText = msg.time || "";
+    timeRow.appendChild(timeEl);
 
-    // Tick for outgoing
-    if (direction === "outgoing") {
-        const meta = document.createElement("div");
-        meta.style.cssText = "display:flex;justify-content:flex-end;align-items:center;gap:3px;margin-top:2px;";
+    if (msg.direction === "outgoing") {
         const tick = document.createElement("span");
-        tick.id = `tick-${msgId}`;
+        tick.id = "tick-" + msg.id;
         tick.className = "msg-tick";
-        tick.innerText = " ✓";
-        meta.appendChild(tick);
-        contentDiv.appendChild(meta);
+        tick.innerText = "✓";
+        timeRow.appendChild(tick);
     }
 
-    card.appendChild(contentDiv);
+    body.appendChild(timeRow);
+    card.appendChild(body);
     container.appendChild(card);
     container.scrollTop = container.scrollHeight;
 }
 
-function renderActualMedia(targetNode, type, payload) {
-    if (type === "media" && payload) {
+function renderMedia(node, type, payload) {
+    if (!type || !payload) return;
+    if (type === "media" && payload.fileData) {
         const wrap = document.createElement("div");
-        wrap.className = "media-container";
         wrap.style.marginTop = "6px";
-        if (payload.fileType && payload.fileType.startsWith("image/")) {
-            wrap.innerHTML = `<img src="${payload.fileData}" class="shared-img">`;
-        } else if (payload.fileType && payload.fileType.startsWith("video/")) {
+        if (payload.fileType?.startsWith("image/")) {
+            wrap.innerHTML = `<img src="${payload.fileData}" class="shared-img" onclick="window.open(this.src)">`;
+        } else if (payload.fileType?.startsWith("video/")) {
             wrap.innerHTML = `<video src="${payload.fileData}" controls class="shared-video"></video>`;
         } else {
-            wrap.innerHTML = `<a href="${payload.fileData}" download="${payload.fileName}" style="color:var(--accent-bright);text-decoration:underline;font-weight:600;">📁 ${payload.fileName}</a>`;
+            wrap.innerHTML = `<a href="${payload.fileData}" download="${payload.fileName}" style="color:var(--accent);font-weight:bold;">📁 ${payload.fileName}</a>`;
         }
-        targetNode.appendChild(wrap);
+        node.appendChild(wrap);
     } else if (type === "audio" && payload) {
         const wrap = document.createElement("div");
-        wrap.className = "media-container";
         wrap.style.marginTop = "6px";
-        wrap.innerHTML = `<audio src="${payload}" controls style="max-width:220px;display:block;"></audio>`;
-        targetNode.appendChild(wrap);
+        wrap.innerHTML = `<audio src="${payload}" controls></audio>`;
+        node.appendChild(wrap);
     }
 }
 
-// ─── 8. Reactions & Delete ─────────────────────────────────────────────────────
-function sendReaction(emoji) {
-    closeReactionModal();
-    renderReactionLocal(selectedMsgIdForContext, emoji);
-    broadcastToMesh({ type: "reaction", msgId: selectedMsgIdForContext, emoji });
+function broadcastToMesh(obj) {
+    activeConnections.forEach(c => { if (c?.open) c.send(obj); });
 }
 
-function triggerDeleteForEveryone() {
-    closeReactionModal();
-    const card = document.getElementById(selectedMsgIdForContext);
-    if (card && card.getAttribute("data-sender") === userGhostID) {
-        renderDeleteLocal(selectedMsgIdForContext);
-        broadcastToMesh({ type: "delete", msgId: selectedMsgIdForContext });
-    } else {
-        showToast("⚠️ You can only delete your own messages!");
-    }
-}
-
-function renderReactionLocal(msgId, emoji) {
-    const card = document.getElementById(msgId);
-    if (!card) return;
-    let badge = card.querySelector(".reaction-badge");
-    if (!badge) {
-        badge = document.createElement("span");
-        badge.className = "reaction-badge";
-        card.appendChild(badge);
-    }
-    badge.innerText = emoji;
-}
-
-function renderDeleteLocal(msgId) {
-    const card = document.getElementById(msgId);
-    if (!card) return;
-    const txt = card.querySelector(".msg-text-content");
-    if (txt) { txt.innerText = "🚫 This message was deleted"; txt.style.cssText = "font-style:italic;opacity:0.5;"; }
-    const media = card.querySelector(".media-container");
-    if (media) media.remove();
-}
-
-// ─── 9. Media & DP ─────────────────────────────────────────────────────────────
-function triggerDPUpload() { document.getElementById("dp-file-input").click(); }
-function handleDPChange(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        userCurrentDP = e.target.result;
-        document.getElementById("my-dp-display").src = userCurrentDP;
-        broadcastToMesh({ type: "dp-update", sender: userGhostID, dpData: userCurrentDP });
-    };
-    reader.readAsDataURL(file);
-}
-
-function triggerFileAttachment() { document.getElementById("attachment-file-input").click(); }
-function handleFileAttachment(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        sendMessageBundle("media", { fileData: e.target.result, fileName: file.name, fileType: file.type });
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
-}
-
-function toggleViewOnceMode() {
-    isViewOnceEnabled = !isViewOnceEnabled;
-    const btn = document.getElementById("view-once-btn");
-    const badge = document.getElementById("view-once-badge");
-    btn.style.color = isViewOnceEnabled ? "#ef4444" : "var(--text-secondary)";
-    if (isViewOnceEnabled) badge.classList.remove("hidden");
-    else badge.classList.add("hidden");
-}
-
-function toggleVoiceRecord() {
-    if (!isRecordingAudio) {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            recordedAudioChunks = [];
-            mediaRecorderInstance = new MediaRecorder(stream);
-            mediaRecorderInstance.ondataavailable = e => recordedAudioChunks.push(e.data);
-            mediaRecorderInstance.onstop = () => {
-                const blob = new Blob(recordedAudioChunks, { type: 'audio/ogg; codecs=opus' });
-                const reader = new FileReader();
-                reader.onload = (e) => sendMessageBundle("audio", e.target.result);
-                reader.readAsDataURL(blob);
-                stream.getTracks().forEach(t => t.stop());
-            };
-            mediaRecorderInstance.start();
-            isRecordingAudio = true;
-            document.getElementById("voice-record-btn").innerText = "🛑";
-            showToast("🎙️ Recording...");
-        }).catch(() => showToast("⚠️ Mic permission denied."));
-    } else {
-        mediaRecorderInstance.stop();
-        isRecordingAudio = false;
-        document.getElementById("voice-record-btn").innerText = "🎙️";
-    }
-}
-
-// ─── 10. Voice / Video Calls ───────────────────────────────────────────────────
-function initiateP2PCall(callType) {
-    if (activeConnections.length === 0) { showToast("⚠️ Connect to a peer first!"); return; }
-    const targetID = activeConnections[0].peer;
-    navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' }).then(stream => {
-        localMediaStream = stream;
-        document.getElementById("call-screen").classList.remove("hidden");
-        document.getElementById("call-status-label").innerText = `📞 Outgoing ${callType === 'video' ? 'Video' : 'Voice'} Call...`;
-        document.getElementById("call-peer-label").innerText = `Calling: ${targetID}`;
-        if (callType === 'video') {
-            document.getElementById("video-grid").classList.remove("hidden");
-            document.getElementById("local-video").srcObject = stream;
-        }
-        activeP2PCallInstance = myPeerInstance.call(targetID, stream, { metadata: { type: callType } });
-        attachCallStreamListeners(activeP2PCallInstance);
-    }).catch(() => showToast("⚠️ Camera/Mic access denied."));
-}
-
-function attachCallStreamListeners(callObj) {
-    callObj.on('stream', remoteStream => {
-        document.getElementById("call-status-label").innerText = "🟢 Connected";
-        const isVideo = callObj.metadata && callObj.metadata.type === 'video';
-        if (isVideo) {
-            document.getElementById("video-grid").classList.remove("hidden");
-            document.getElementById("remote-video").srcObject = remoteStream;
-        } else {
-            document.getElementById("remote-video").srcObject = remoteStream;
-            document.getElementById("video-grid").classList.add("hidden");
-        }
-    });
-    callObj.on('close', endCurrentCallLocalFlow);
-    callObj.on('error', endCurrentCallLocalFlow);
-}
-
-function handleIncomingCallSetup(incomingCall) {
-    pendingIncomingCallEvent = incomingCall;
-    const callType = incomingCall.metadata && incomingCall.metadata.type === 'video' ? 'Video' : 'Voice';
-    document.getElementById("call-screen").classList.remove("hidden");
-    document.getElementById("call-status-label").innerText = `🔔 Incoming ${callType} Call...`;
-    document.getElementById("call-peer-label").innerText = `From: ${incomingCall.peer}`;
-    document.getElementById("accept-call-btn").classList.remove("hidden");
-}
-
-function acceptIncomingCall() {
-    document.getElementById("accept-call-btn").classList.add("hidden");
-    const callType = pendingIncomingCallEvent.metadata && pendingIncomingCallEvent.metadata.type;
-    navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' }).then(stream => {
-        localMediaStream = stream;
-        if (callType === 'video') {
-            document.getElementById("video-grid").classList.remove("hidden");
-            document.getElementById("local-video").srcObject = stream;
-        }
-        pendingIncomingCallEvent.answer(stream);
-        attachCallStreamListeners(pendingIncomingCallEvent);
-    }).catch(() => showToast("⚠️ Could not access camera/mic."));
-}
-
-function endCurrentCall() {
-    if (activeP2PCallInstance) activeP2PCallInstance.close();
-    if (pendingIncomingCallEvent) pendingIncomingCallEvent.close();
-    endCurrentCallLocalFlow();
-}
-
-function endCurrentCallLocalFlow() {
-    if (localMediaStream) localMediaStream.getTracks().forEach(t => t.stop());
-    localMediaStream = null; activeP2PCallInstance = null; pendingIncomingCallEvent = null;
-    document.getElementById("remote-video").srcObject = null;
-    document.getElementById("local-video").srcObject = null;
-    document.getElementById("call-screen").classList.add("hidden");
-    document.getElementById("accept-call-btn").classList.add("hidden");
-    document.getElementById("video-grid").classList.add("hidden");
-}
-
-// ─── 11. UI Helpers ─────────────────────────────────────────────────────────────
-function toggleAppTheme() {
-    const body = document.body;
-    const btn = document.getElementById("theme-toggle-btn");
-    if (body.classList.contains("dark-theme")) {
-        body.classList.replace("dark-theme", "light-theme");
-        btn.innerText = "🌙";
-    } else {
-        body.classList.replace("light-theme", "dark-theme");
-        btn.innerText = "☀️";
-    }
-}
-
-function openConnectModal() { document.getElementById("connect-modal").classList.remove("hidden"); }
-function closeConnectModal() {
-    document.getElementById("connect-modal").classList.add("hidden");
-    document.getElementById("peer-id-input").value = "";
-}
-function openReactionModal(msgId) { selectedMsgIdForContext = msgId; document.getElementById("reaction-modal").classList.remove("hidden"); }
-function closeReactionModal() { document.getElementById("reaction-modal").classList.add("hidden"); }
-
+// ===== TYPING =====
 function setupTypingListener() {
-    const input = document.getElementById("msg-input");
-    if (!input) return;
-    input.addEventListener("input", () => {
+    const inp = document.getElementById("msg-input");
+    if (!inp) return;
+    inp.addEventListener("input", () => {
         broadcastToMesh({ type: "typing", sender: userGhostID, isTyping: true });
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => broadcastToMesh({ type: "typing", sender: userGhostID, isTyping: false }), 2000);
     });
 }
 
-function updateSystemStatus(msg) {
-    const container = document.getElementById("messages-container");
-    if (!container) return;
-    const div = document.createElement("div");
-    div.className = "system-msg";
-    div.innerText = msg;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
+document.addEventListener("DOMContentLoaded", setupTypingListener);
+
+// ===== REACTIONS + DELETE =====
+function openReactionModal(msgId) { selectedMsgIdForContext = msgId; showEl("reaction-modal"); }
+function closeReactionModal() { hideEl("reaction-modal"); }
+
+function sendReaction(emoji) {
+    closeReactionModal();
+    if (!selectedMsgIdForContext) return;
+    renderReactionLocal(selectedMsgIdForContext, emoji);
+    broadcastToMesh({ type: "reaction", msgId: selectedMsgIdForContext, emoji });
 }
 
-// Toast notification
-function showToast(msg) {
-    let toast = document.getElementById("ghost-toast");
-    if (!toast) {
-        toast = document.createElement("div");
-        toast.id = "ghost-toast";
-        toast.style.cssText = `
-            position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
-            background:rgba(0,0,0,0.85); color:white; padding:10px 20px;
-            border-radius:22px; font-size:13px; z-index:9999;
-            white-space:nowrap; pointer-events:none;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-            transition: opacity 0.3s;
-        `;
-        document.body.appendChild(toast);
+function renderReactionLocal(msgId, emoji) {
+    const card = document.getElementById(msgId);
+    if (!card) return;
+    let badge = card.querySelector(".reaction-badge");
+    if (!badge) { badge = document.createElement("span"); badge.className = "reaction-badge"; card.appendChild(badge); }
+    badge.innerText = emoji;
+}
+
+function triggerDeleteForEveryone() {
+    closeReactionModal();
+    const card = document.getElementById(selectedMsgIdForContext);
+    if (!card) return;
+    if (card.getAttribute("data-sender") !== userGhostID) { showToast("Can only delete your own messages"); return; }
+    renderDeleteLocal(selectedMsgIdForContext);
+    broadcastToMesh({ type: "delete", msgId: selectedMsgIdForContext });
+}
+
+function renderDeleteLocal(msgId) {
+    const card = document.getElementById(msgId);
+    if (!card) return;
+    const txt = card.querySelector(".msg-text-content");
+    if (txt) { txt.innerText = "🚫 Message deleted"; txt.style.cssText = "font-style:italic;opacity:0.5;"; }
+    card.querySelector(".media-container")?.remove();
+}
+
+// ===== THEME =====
+function toggleAppTheme() {
+    closeAllMenus();
+    document.body.classList.toggle("light-theme");
+}
+
+// ===== DP =====
+function triggerDPUpload() { document.getElementById("dp-file-input").click(); }
+function handleDPChange(event) {
+    const file = event.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        userCurrentDP = e.target.result;
+        document.getElementById("my-dp-chatlist").src = userCurrentDP;
+        document.getElementById("profile-dp-big").src = userCurrentDP;
+        broadcastToMesh({ type: "dp-update", sender: userGhostID, dpData: userCurrentDP });
+        showToast("✅ Profile photo updated");
+    };
+    reader.readAsDataURL(file);
+}
+
+function copyGhostID() {
+    navigator.clipboard?.writeText(userGhostID).then(() => showToast("📋 Ghost ID copied!")).catch(() => showToast(userGhostID));
+}
+
+// ===== FILE ATTACH =====
+function triggerFileAttachment() { document.getElementById("attachment-file-input").click(); }
+function handleFileAttachment(event) {
+    const file = event.target.files[0]; if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { showToast("File too large! Max 10MB"); return; }
+    const reader = new FileReader();
+    reader.onload = e => sendBundle("media", { fileData: e.target.result, fileName: file.name, fileType: file.type });
+    reader.readAsDataURL(file);
+}
+
+// ===== VIEW ONCE =====
+function toggleViewOnceMode() {
+    isViewOnceEnabled = !isViewOnceEnabled;
+    document.getElementById("view-once-btn").style.color = isViewOnceEnabled ? "var(--accent)" : "";
+    document.getElementById("view-once-badge").classList.toggle("hidden", !isViewOnceEnabled);
+}
+
+// ===== VOICE RECORD =====
+function toggleVoiceRecord() {
+    const btn = document.getElementById("voice-record-btn");
+    if (!isRecordingAudio) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            recordedAudioChunks = [];
+            mediaRecorderInstance = new MediaRecorder(stream);
+            mediaRecorderInstance.ondataavailable = e => recordedAudioChunks.push(e.data);
+            mediaRecorderInstance.onstop = () => {
+                const blob = new Blob(recordedAudioChunks, { type: 'audio/ogg' });
+                const reader = new FileReader();
+                reader.onload = e => sendBundle("audio", e.target.result);
+                reader.readAsDataURL(blob);
+                stream.getTracks().forEach(t => t.stop());
+            };
+            mediaRecorderInstance.start();
+            isRecordingAudio = true;
+            btn.innerText = "🛑";
+            btn.style.color = "var(--danger)";
+        }).catch(() => showToast("Mic permission denied"));
+    } else {
+        mediaRecorderInstance.stop();
+        isRecordingAudio = false;
+        btn.innerText = "🎙️";
+        btn.style.color = "";
     }
+}
+
+// ===== CALLS =====
+function initiateP2PCall(type) {
+    if (activeConnections.length === 0) { showToast("Connect to a peer first!"); return; }
+    const target = currentChatPeer || activeConnections[0].peer;
+    navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' }).then(stream => {
+        localMediaStream = stream;
+        showEl("call-screen");
+        document.getElementById("call-status-label").innerText = type === 'video' ? "📹 Video Calling..." : "📞 Voice Calling...";
+        document.getElementById("call-peer-label").innerText = target;
+        if (type === 'video') {
+            document.getElementById("video-grid").classList.remove("hidden");
+            document.getElementById("local-video").srcObject = stream;
+        }
+        activeP2PCallInstance = myPeerInstance.call(target, stream, { metadata: { type } });
+        listenCallStream(activeP2PCallInstance, type);
+    }).catch(() => showToast("Camera/Mic access denied"));
+}
+
+function listenCallStream(callObj, type) {
+    callObj.on('stream', remoteStream => {
+        document.getElementById("call-status-label").innerText = "🟢 Connected";
+        document.getElementById("remote-video").srcObject = remoteStream;
+        if (type === 'video') document.getElementById("video-grid").classList.remove("hidden");
+    });
+    callObj.on('close', endCallFlow);
+    callObj.on('error', endCallFlow);
+}
+
+function handleIncomingCall(call) {
+    pendingIncomingCallEvent = call;
+    const type = call.metadata?.type || 'voice';
+    showEl("call-screen");
+    document.getElementById("call-status-label").innerText = type === 'video' ? "📹 Incoming Video Call" : "📞 Incoming Voice Call";
+    document.getElementById("call-peer-label").innerText = call.peer;
+    document.getElementById("accept-call-btn").classList.remove("hidden");
+}
+
+function acceptIncomingCall() {
+    document.getElementById("accept-call-btn").classList.add("hidden");
+    const type = pendingIncomingCallEvent?.metadata?.type || 'voice';
+    navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' }).then(stream => {
+        localMediaStream = stream;
+        if (type === 'video') { document.getElementById("video-grid").classList.remove("hidden"); document.getElementById("local-video").srcObject = stream; }
+        pendingIncomingCallEvent.answer(stream);
+        listenCallStream(pendingIncomingCallEvent, type);
+    }).catch(() => showToast("Camera/Mic access denied"));
+}
+
+function endCurrentCall() {
+    activeP2PCallInstance?.close();
+    pendingIncomingCallEvent?.close();
+    endCallFlow();
+}
+
+function endCallFlow() {
+    localMediaStream?.getTracks().forEach(t => t.stop());
+    localMediaStream = null; activeP2PCallInstance = null; pendingIncomingCallEvent = null;
+    document.getElementById("remote-video").srcObject = null;
+    document.getElementById("local-video").srcObject = null;
+    hideEl("call-screen");
+    document.getElementById("accept-call-btn").classList.add("hidden");
+    document.getElementById("video-grid").classList.add("hidden");
+}
+
+// ===== RADAR MAP =====
+function initRadarMap() {
+    try {
+        radarMapInstance = L.map('live-radar-map').setView([20.5937, 78.9629], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(radarMapInstance);
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+                radarMapInstance.setView([userLat, userLng], 13);
+                L.marker([userLat, userLng]).addTo(radarMapInstance).bindPopup(`<b>👻 You (${userGhostID})</b>`).openPopup();
+                spawnNearbyNodes(userLat, userLng, radarMapInstance);
+            }, () => spawnNearbyNodes(20.5937, 78.9629, radarMapInstance));
+        }
+    } catch(e) { console.error(e); }
+}
+
+function toggleRadarMap() {
+    closeAllMenus();
+    const map = document.getElementById("map-container");
+    const hidden = map.classList.contains("hidden");
+    map.classList.toggle("hidden", !hidden);
+    if (!hidden) return;
+    if (radarMapInstance) setTimeout(() => radarMapInstance.invalidateSize(), 300);
+}
+
+function spawnNearbyNodes(lat, lng, mapInst) {
+    const nodes = [
+        { id: "Ghost-4683", lo: 0.005, ln: 0.003 },
+        { id: "Ghost-7446", lo: -0.004, ln: -0.006 },
+        { id: "Ghost-9122", lo: 0.002, ln: -0.003 }
+    ];
+    nodes.forEach(n => {
+        L.marker([lat + n.lo, lng + n.ln]).addTo(mapInst).bindPopup(
+            `<b>👾 ${n.id}</b><br>Status: Online<br><button class="map-connect-btn" onclick="connectToPeer('${n.id}')">⚡ Connect</button>`
+        );
+    });
+}
+
+// ===== SOS =====
+function initSOSMap() {
+    if (sosMapInstance) { setTimeout(() => sosMapInstance.invalidateSize(), 200); return; }
+    try {
+        sosMapInstance = L.map('sos-map').setView([userLat, userLng], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(sosMapInstance);
+        L.marker([userLat, userLng]).addTo(sosMapInstance).bindPopup("📍 Your Location").openPopup();
+        spawnNearbyNodes(userLat, userLng, sosMapInstance);
+    } catch(e) { console.error(e); }
+}
+
+function fetchSOSInfo() {
+    document.getElementById("sos-peers").innerText = activeConnections.length + " peers";
+    // Battery
+    if (navigator.getBattery) {
+        navigator.getBattery().then(b => {
+            document.getElementById("sos-battery").innerText = Math.round(b.level * 100) + "%";
+        });
+    }
+    // Location
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+            userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+            document.getElementById("sos-my-location").innerText = userLat.toFixed(4) + ", " + userLng.toFixed(4);
+        }, () => {
+            document.getElementById("sos-my-location").innerText = "Location blocked";
+        });
+    }
+}
+
+function toggleSOS() {
+    const btn = document.getElementById("sos-main-btn");
+    if (!sosActive) {
+        sosActive = true;
+        btn.innerHTML = "🛑 STOP SOS";
+        btn.classList.add("active-sos");
+        document.getElementById("sos-title").innerText = "🆘 SOS ACTIVE!";
+        document.getElementById("sos-desc").innerText = "Broadcasting your location to all nearby Ghost Mesh peers...";
+        broadcastSOS();
+        sosInterval = setInterval(broadcastSOS, 15000);
+        showToast("🆘 SOS Alert sent to all peers!");
+    } else {
+        sosActive = false;
+        clearInterval(sosInterval);
+        btn.innerHTML = "🆘 SEND SOS ALERT";
+        btn.classList.remove("active-sos");
+        document.getElementById("sos-title").innerText = "Emergency Help";
+        document.getElementById("sos-desc").innerText = "Press SOS to alert all nearby Ghost Mesh users with your live GPS location";
+        showToast("SOS stopped");
+    }
+}
+
+function broadcastSOS() {
+    broadcastToMesh({ type: "sos", sender: userGhostID, lat: userLat, lng: userLng,
+        senderDP: userCurrentDP, time: new Date().toLocaleTimeString() });
+}
+
+function showNearbyAlert(data) {
+    const box = document.getElementById("nearby-alerts");
+    const list = document.getElementById("nearby-alerts-list");
+    box.classList.remove("hidden");
+    const item = document.createElement("div");
+    item.style.cssText = "padding:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;margin-bottom:8px;font-size:13px;";
+    item.innerHTML = `<b>🆘 ${data.sender}</b><br>📍 Lat: ${data.lat?.toFixed(4)}, Lng: ${data.lng?.toFixed(4)}<br>🕐 ${data.time}
+        <br><button onclick="connectToPeer('${data.sender}')" style="background:var(--danger);color:white;border:none;padding:5px 12px;border-radius:8px;margin-top:6px;cursor:pointer;font-weight:700;">📞 Respond</button>`;
+    list.prepend(item);
+}
+
+function shareLiveLocation() {
+    closeAllMenus();
+    if (!navigator.geolocation) { showToast("Location not available"); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        broadcastToMesh({ type: "location", sender: userGhostID, lat, lng, senderDP: userCurrentDP });
+        showToast("📍 Live location shared for 15 min");
+        if (liveLocationInterval) clearInterval(liveLocationInterval);
+        liveLocationInterval = setInterval(() => {
+            navigator.geolocation.getCurrentPosition(p => {
+                broadcastToMesh({ type: "location", sender: userGhostID, lat: p.coords.latitude, lng: p.coords.longitude, senderDP: userCurrentDP });
+            });
+        }, 30000);
+        setTimeout(() => { clearInterval(liveLocationInterval); showToast("📍 Live location stopped"); }, 15 * 60 * 1000);
+    }, () => showToast("Location permission denied"));
+}
+
+// ===== CHAT MENU ACTIONS =====
+function muteCurrentChat() { closeAllMenus(); if (currentChatPeer && chatData[currentChatPeer]) { chatData[currentChatPeer].muted = true; showToast("🔇 Chat muted"); } }
+function clearCurrentChat() { closeAllMenus(); if (!currentChatPeer) return; if (confirm("Clear all messages?")) { chatData[currentChatPeer].messages = []; renderAllMessages(currentChatPeer); showToast("🗑️ Chat cleared"); } }
+function clearAllChats() { closeAllMenus(); if (confirm("Clear all chats?")) { Object.keys(chatData).forEach(k => chatData[k].messages = []); showToast("🗑️ All chats cleared"); renderChatList(); } }
+function blockCurrentPeer() { closeAllMenus(); if (!currentChatPeer) return; if (confirm("Block " + currentChatPeer + "?")) { activeConnections = activeConnections.filter(c => c.peer !== currentChatPeer); delete chatData[currentChatPeer]; goBackToList(); showToast("🚫 " + currentChatPeer + " blocked"); } }
+function disconnectCurrentPeer() { closeAllMenus(); const conn = activeConnections.find(c => c.peer === currentChatPeer); if (conn) conn.close(); goBackToList(); showToast("🔌 Disconnected"); }
+function searchInChat() { closeAllMenus(); showToast("Search coming soon!"); }
+function viewSharedMedia() { closeAllMenus(); showToast("Media gallery coming soon!"); }
+
+// ===== MENU TOGGLES =====
+function toggleMainMenu() {
+    const m = document.getElementById("main-menu");
+    m.classList.toggle("hidden");
+}
+
+function toggleChatMenu() {
+    const m = document.getElementById("chat-menu");
+    m.classList.toggle("hidden");
+}
+
+function closeAllMenus() {
+    document.getElementById("main-menu")?.classList.add("hidden");
+    document.getElementById("chat-menu")?.classList.add("hidden");
+}
+
+document.addEventListener("click", e => {
+    if (!e.target.closest(".three-dot-wrap")) closeAllMenus();
+});
+
+// ===== TOAST =====
+let toastTimer;
+function showToast(msg) {
+    const toast = document.getElementById("toast");
     toast.innerText = msg;
-    toast.style.opacity = "1";
-    clearTimeout(toast._timeout);
-    toast._timeout = setTimeout(() => { toast.style.opacity = "0"; }, 2500);
+    toast.classList.remove("hidden");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.add("hidden"), 3000);
 }
