@@ -22,7 +22,7 @@ const bannedWords = ["blackmail", "blakmail", "paisa do", "rupay do", "video lea
 
 // 1. App Privacy Pin Lock System
 function checkAppLock() {
-    const savedPin = localStorage.getItem("superviva_app_pin");
+    const savedPin = localStorage.getItem("ghostmesh_app_pin");
     if (savedPin) {
         document.getElementById("login-screen").classList.add("hidden");
         document.getElementById("lock-screen").classList.remove("hidden");
@@ -33,7 +33,7 @@ function checkAppLock() {
 
 function unlockApp() {
     const pinInput = document.getElementById("app-pin-input").value;
-    const savedPin = localStorage.getItem("superviva_app_pin");
+    const savedPin = localStorage.getItem("ghostmesh_app_pin");
     if (pinInput === savedPin) {
         document.getElementById("lock-screen").classList.add("hidden");
         document.getElementById("login-screen").classList.remove("hidden");
@@ -52,13 +52,13 @@ function verifyAndLogin() {
         alert("Security requirement: Enter a valid verified phone number.");
         return;
     }
-    if (pinSetup.length === 4) localStorage.setItem("superviva_app_pin", pinSetup);
-    localStorage.setItem("superviva_saved_phone", phoneInput);
+    if (pinSetup.length === 4) localStorage.setItem("ghostmesh_app_pin", pinSetup);
+    localStorage.setItem("ghostmesh_saved_phone", phoneInput);
     executeLoginSequence(phoneInput);
 }
 
 function verifyAndLoginAuto() {
-    const savedPhone = localStorage.getItem("superviva_saved_phone");
+    const savedPhone = localStorage.getItem("ghostmesh_saved_phone");
     if (savedPhone) executeLoginSequence(savedPhone);
 }
 
@@ -97,7 +97,7 @@ function closeConnectModal() { document.getElementById("connect-modal").classLis
 function openReactionModal(msgId) { selectedMsgIdForContext = msgId; document.getElementById("reaction-modal").classList.remove("hidden"); }
 function closeReactionModal() { document.getElementById("reaction-modal").classList.add("hidden"); }
 
-// 4. Gallery Profile Picture Controls
+// 4. Profile Picture Controls
 function triggerDPUpload() { document.getElementById("dp-file-input").click(); }
 function handleDPChange(event) {
     const file = event.target.files[0];
@@ -111,7 +111,7 @@ function handleDPChange(event) {
     reader.readAsDataURL(file);
 }
 
-// 5. Advanced Media & Document Sharing Engine
+// 5. Media & Document Sharing
 function triggerFileAttachment() { document.getElementById("attachment-file-input").click(); }
 function handleFileAttachment(event) {
     const file = event.target.files[0];
@@ -132,7 +132,7 @@ function toggleViewOnceMode() {
     else { btn.style.color = "#9ca3af"; badge.classList.add("hidden"); }
 }
 
-// 7. Voice Note Recorder Engine
+// 7. Voice Note Recorder Engine (केवल बटन दबाने पर माइक मांगेगा)
 function toggleVoiceRecord() {
     if (!isRecordingAudio) {
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
@@ -144,11 +144,12 @@ function toggleVoiceRecord() {
                 const reader = new FileReader();
                 reader.onload = function(e) { sendMessageBundle("audio", e.target.result); };
                 reader.readAsDataURL(audioBlob);
+                stream.getTracks().forEach(track => track.stop()); // माइक बंद करें
             };
             mediaRecorderInstance.start();
             isRecordingAudio = true;
             document.getElementById("voice-record-btn").innerText = "🛑";
-        }).catch(() => alert("Mic hardware access denied. Please allow microphone permission."));
+        }).catch(() => alert("Mic permission denied."));
     } else {
         mediaRecorderInstance.stop();
         isRecordingAudio = false;
@@ -156,23 +157,34 @@ function toggleVoiceRecord() {
     }
 }
 
-// 8. Reactions & Message Deletion Pipeline
+// 8. Reactions & Deletion
 function sendReaction(emoji) {
     closeReactionModal();
     renderReactionLocal(selectedMsgIdForContext, emoji);
     broadcastToMesh({ type: "reaction", msgId: selectedMsgIdForContext, emoji: emoji });
 }
 
-// 9. LIVE P2P VOICE AND VIDEO CALLING ENGINE
+function triggerDeleteForEveryone() {
+    closeReactionModal();
+    const card = document.getElementById(selectedMsgIdForContext);
+    if (card && card.getAttribute("data-sender") === userGhostID) {
+        renderDeleteLocal(selectedMsgIdForContext);
+        broadcastToMesh({ type: "delete", msgId: selectedMsgIdForContext });
+    } else {
+        alert("You can only delete your own messages!");
+    }
+}
+
+// 9. LIVE P2P VOICE AND VIDEO CALLING
 function initiateP2PCall(callType) {
-    if (activeConnections.length === 0) { alert("Please connect to a live peer node first before calling."); return; }
+    if (activeConnections.length === 0) { alert("Please connect to a live peer node first."); return; }
     const targetPeerNodeID = activeConnections[0].peer;
     const constraints = { audio: true, video: callType === 'video' };
     
     navigator.mediaDevices.getUserMedia(constraints).then(stream => {
         localMediaStream = stream;
         document.getElementById("call-screen").classList.remove("hidden");
-        document.getElementById("call-status-label").innerText = `📞 Outgoing P2P ${callType === 'video' ? 'Video' : 'Voice'} Call...`;
+        document.getElementById("call-status-label").innerText = `📞 Outgoing ${callType === 'video' ? 'Video' : 'Voice'} Call...`;
         document.getElementById("call-peer-label").innerText = `Target: ${targetPeerNodeID}`;
         if (callType === 'video') {
             document.getElementById("video-grid").classList.remove("hidden");
@@ -181,8 +193,7 @@ function initiateP2PCall(callType) {
         activeP2PCallInstance = myPeerInstance.call(targetPeerNodeID, stream, { metadata: { type: callType } });
         attachCallStreamListeners(activeP2PCallInstance);
     }).catch(err => {
-        console.error(err);
-        alert("Camera/Mic allocation failed. Check permission settings.");
+        alert("Camera/Mic access denied or failed.");
     });
 }
 
@@ -204,7 +215,7 @@ function attachCallStreamListeners(callObj) {
 function handleIncomingCallSetup(incomingCall) {
     pendingIncomingCallEvent = incomingCall;
     document.getElementById("call-screen").classList.remove("hidden");
-    document.getElementById("call-status-label").innerText = `🔔 Incoming P2P ${incomingCall.metadata.type === 'video' ? 'Video' : 'Voice'} Call...`;
+    document.getElementById("call-status-label").innerText = `🔔 Incoming ${incomingCall.metadata.type === 'video' ? 'Video' : 'Voice'} Call...`;
     document.getElementById("call-peer-label").innerText = `From: ${incomingCall.peer}`;
     document.getElementById("accept-call-btn").classList.remove("hidden");
 }
@@ -221,7 +232,6 @@ function acceptIncomingCall() {
         pendingIncomingCallEvent.answer(stream);
         attachCallStreamListeners(pendingIncomingCallEvent);
     }).catch(err => {
-        console.error(err);
         alert("Could not access camera/mic.");
     });
 }
@@ -247,17 +257,6 @@ function renderReactionLocal(msgId, emoji) {
     let badge = card.querySelector(".reaction-badge");
     if (!badge) { badge = document.createElement("span"); badge.className = "reaction-badge"; card.appendChild(badge); }
     badge.innerText = emoji;
-}
-
-function triggerDeleteForEveryone() {
-    closeReactionModal();
-    const card = document.getElementById(selectedMsgIdForContext);
-    if (card && card.getAttribute("data-sender") === userGhostID) {
-        renderDeleteLocal(selectedMsgIdForContext);
-        broadcastToMesh({ type: "delete", msgId: selectedMsgIdForContext });
-    } else {
-        alert("You can only delete your own sent messages!");
-    }
 }
 
 // 10. Core P2P Mesh Pipeline Management
@@ -340,7 +339,6 @@ function sendMessageBundle(contentType, payload) {
 
 function broadcastToMesh(obj) { activeConnections.forEach(conn => { if (conn.open) conn.send(obj); }); }
 
-// 12. UI Layout Rendering Engine
 function appendMessage(sender, text, direction, msgId, avatarSrc, contentType, mediaPayload, viewOnce) {
     const container = document.getElementById("messages-container");
     const card = document.createElement("div");
@@ -380,23 +378,18 @@ function appendMessage(sender, text, direction, msgId, avatarSrc, contentType, m
     if (direction === "outgoing") {
         const tick = document.createElement("span"); tick.id = `tick-${msgId}`; tick.innerText = " ✓"; tick.style.fontSize = "11px"; tick.style.color = "#a6b4be"; tick.style.marginLeft = "5px";
         txtNode.appendChild(tick);
-        if (viewOnce) {
-            const vBadge = document.createElement("span"); vBadge.innerText = " (❶ View Once)"; vBadge.style.fontSize = "10px"; vBadge.style.color = "#ff4a4a";
-            txtNode.appendChild(vBadge);
-        }
     }
 
     card.appendChild(imgNode); card.appendChild(contentDiv); container.appendChild(card);
     container.scrollTop = container.scrollHeight;
 }
 
-// 13. Dynamic Media Rendering Engine
 function renderActualMedia(targetNode, type, payload) {
     if (type === "media" && payload) {
         if (payload.fileType.startsWith("image/")) { 
-            targetNode.innerHTML += `<div class="media-container" style="margin-top:5px;"><img src="${payload.fileData}" class="shared-img"><br><a href="${payload.fileData}" download="${payload.fileName || 'Image.png'}" style="display:inline-block; margin-top:5px; color:#00f2fe; text-decoration:none; font-size:12px; font-weight:bold;">⬇️ Download</a></div>`;
+            targetNode.innerHTML += `<div class="media-container" style="margin-top:5px;"><img src="${payload.fileData}" class="shared-img"></div>`;
         } else if (payload.fileType.startsWith("video/")) { 
-            targetNode.innerHTML += `<div class="media-container" style="margin-top:5px;"><video src="${payload.fileData}" controls class="shared-video"></video><br><a href="${payload.fileData}" download="${payload.fileName || 'Video.mp4'}" style="display:inline-block; margin-top:5px; color:#00f2fe; text-decoration:none; font-size:12px; font-weight:bold;">⬇️ Download</a></div>`;
+            targetNode.innerHTML += `<div class="media-container" style="margin-top:5px;"><video src="${payload.fileData}" controls class="shared-video"></video></div>`;
         } else { 
             targetNode.innerHTML += `<div class="media-container" style="margin-top:5px;"><a href="${payload.fileData}" download="${payload.fileName}" style="color:#00f2fe; text-decoration:underline; font-weight:bold;">📁 ${payload.fileName}</a></div>`;
         }
